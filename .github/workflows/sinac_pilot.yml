@@ -10,12 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Install pandas
+        run: python -m pip install --quiet pandas
       - name: Download official SINAC 2023 CSV and compute pilot aggregates
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import io, os, sys, urllib.request
+          import os, urllib.request
           import pandas as pd
 
           url = "https://repodatos.atdt.gob.mx/all_data/secretaria_salud/77c166cc-bcbf-4b28-806e-f2a60c3de821/2023_Nacimientos_2023.csv"
@@ -72,7 +74,6 @@ jobs:
           print("clues_valid_rows", int((~invalid).sum()))
           print("clues_unique_valid", int(cl[~invalid].nunique()))
 
-          # Facility volumes for cesareans by raw TIPOCESAREA code.
           ces_cl = ces["CLUES"].astype("string").str.strip()
           ces_valid = ces[~(ces_cl.isna() | ces_cl.eq("") | ces_cl.eq("9998"))].copy()
           print("\ncesarean_rows_valid_clues", len(ces_valid))
@@ -86,7 +87,6 @@ jobs:
               for threshold in [10,20,30,50,100,200]:
                   print(f"facilities_ge_{threshold}", int((vols >= threshold).sum()))
 
-          # Raw timing indicators for each observed cesarean type code.
           print("\n=== Raw early-term timing by TIPOCESAREA code ===")
           for code in sorted(term["TIPOCESAREA"].dropna().unique().tolist()):
               sub = term[term["TIPOCESAREA"] == code]
@@ -95,12 +95,10 @@ jobs:
                     "n_37_38", int(early),
                     "pct_37_38", round(100*early/len(sub),3) if len(sub) else None)
 
-          # Candidate singleton code(s): report timing by PRODUCTOEMBARAZO raw code
           print("\n=== Cesarean timing by PRODUCTOEMBARAZO and TIPOCESAREA raw codes (37-41) ===")
           tab = term.groupby(["PRODUCTOEMBARAZO","TIPOCESAREA","EDADGESTACIONAL"]).size()
           print(tab.to_string())
 
-          # Neonatal adaptation descriptive validation
           print("\n=== APGAR<7 and SILVERMAN>0 by TIPOCESAREA and GA, cesareans 37-41 ===")
           agg = term.groupby(["TIPOCESAREA","EDADGESTACIONAL"]).agg(
               n=("APGAR","size"),
