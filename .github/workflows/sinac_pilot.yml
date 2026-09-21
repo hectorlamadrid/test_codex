@@ -8,30 +8,42 @@ on:
 jobs:
   pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Install pandas
         run: python -m pip install --quiet pandas
-      - name: Download official SINAC 2023 CSV and compute pilot aggregates
+      - name: Analyze trusted Dropbox copy of SINAC 2023
         shell: bash
+        env:
+          SINAC_ZIP_URL: "https://uc8e569ff45889c813125f42cce4.dl.dropboxusercontent.com/cd/0/get/DIlZNKDa6MaIrtM9_lNyHOwk7Pc9mKnja8-Wxrhr24aHX6tpksOkjmEVkkiRAEEq13LRxo316inLb7gNMLuPNYCvAaN_fWKs1p1HtW70qTvLVBGM-h-KSCpRUgQIyubFFDEDgLNTE8uR1iibajS2D_AhpsMznXHsgt1w9EIAUuCS2g/file?c_luid=a0ce1b98"
         run: |
           set -euo pipefail
           python - <<'PY'
-          import os, urllib.request
+          import os, urllib.request, zipfile
           import pandas as pd
 
-          url = "https://repodatos.atdt.gob.mx/all_data/secretaria_salud/77c166cc-bcbf-4b28-806e-f2a60c3de821/2023_Nacimientos_2023.csv"
-          fn = "Nacimientos_2023.csv"
+          url = os.environ["SINAC_ZIP_URL"]
+          zfn = "sinac_2023.zip"
 
-          print("Downloading official SINAC 2023 CSV...", flush=True)
+          print("Downloading trusted SINAC 2023 ZIP copy...", flush=True)
           req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
-          with urllib.request.urlopen(req, timeout=120) as r, open(fn, "wb") as f:
+          with urllib.request.urlopen(req, timeout=180) as r, open(zfn, "wb") as f:
               while True:
                   chunk = r.read(1024*1024)
-                  if not chunk:
-                      break
+                  if not chunk: break
                   f.write(chunk)
-          print("downloaded_bytes", os.path.getsize(fn), flush=True)
+          print("downloaded_zip_bytes", os.path.getsize(zfn), flush=True)
+
+          with zipfile.ZipFile(zfn) as z:
+              members = [x for x in z.infolist() if not x.is_dir()]
+              print("zip_members", [(m.filename, m.file_size) for m in members])
+              csvs = [m for m in members if m.filename.lower().endswith(".csv")]
+              if not csvs:
+                  raise RuntimeError("No CSV found in ZIP")
+              target = max(csvs, key=lambda m: m.file_size)
+              print("selected_csv", target.filename, target.file_size)
+              z.extract(target, ".")
+              fn = target.filename
 
           cols = [
               "EDADGESTACIONAL","RESOLUCIONEMBARAZO","TIPOCESAREA",
@@ -59,9 +71,6 @@ jobs:
           print("\nterm_cesarean_rows_37_41", len(term))
           print("\n=== TIPOCESAREA x gestational week among cesareans 37-41 ===")
           print(pd.crosstab(term["TIPOCESAREA"], term["EDADGESTACIONAL"], dropna=False).to_string())
-
-          print("\n=== Gestational week distribution among cesareans (all codes) ===")
-          print(ces["EDADGESTACIONAL"].value_counts(dropna=False).sort_index().to_string())
 
           print("\n=== PRODUCTOEMBARAZO raw counts ===")
           print(df["PRODUCTOEMBARAZO"].value_counts(dropna=False).sort_index().to_string())
@@ -109,6 +118,8 @@ jobs:
           )
           print(agg.to_string())
 
-          os.remove(fn)
-          print("\nPilot complete; downloaded row-level file removed from runner workspace.")
+          try: os.remove(fn)
+          except: pass
+          os.remove(zfn)
+          print("\nPilot complete; row-level files removed from ephemeral runner workspace.")
           PY
