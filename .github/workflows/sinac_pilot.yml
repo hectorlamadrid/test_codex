@@ -1,125 +1,15 @@
 name: SINAC MAPFRE pilot
 
+# This workflow is intentionally inert after the one-time pilot run.
+# No Dropbox URL, row-level data, or credentials are stored in the current branch.
+# The completed 2023 pilot used a short-lived file-specific URL to a trusted
+# Dropbox copy and printed aggregate results only.
+
 on:
-  push:
-    branches:
-      - sinac-mapfre-pilot
+  workflow_dispatch:
 
 jobs:
-  pilot:
+  placeholder:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      - name: Install pandas
-        run: python -m pip install --quiet pandas
-      - name: Analyze trusted Dropbox copy of SINAC 2023
-        shell: bash
-        env:
-          SINAC_ZIP_URL: "https://uc8e569ff45889c813125f42cce4.dl.dropboxusercontent.com/cd/0/get/DIlZNKDa6MaIrtM9_lNyHOwk7Pc9mKnja8-Wxrhr24aHX6tpksOkjmEVkkiRAEEq13LRxo316inLb7gNMLuPNYCvAaN_fWKs1p1HtW70qTvLVBGM-h-KSCpRUgQIyubFFDEDgLNTE8uR1iibajS2D_AhpsMznXHsgt1w9EIAUuCS2g/file?c_luid=a0ce1b98"
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os, urllib.request, zipfile
-          import pandas as pd
-
-          url = os.environ["SINAC_ZIP_URL"]
-          zfn = "sinac_2023.zip"
-
-          print("Downloading trusted SINAC 2023 ZIP copy...", flush=True)
-          req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
-          with urllib.request.urlopen(req, timeout=180) as r, open(zfn, "wb") as f:
-              while True:
-                  chunk = r.read(1024*1024)
-                  if not chunk: break
-                  f.write(chunk)
-          print("downloaded_zip_bytes", os.path.getsize(zfn), flush=True)
-
-          with zipfile.ZipFile(zfn) as z:
-              members = [x for x in z.infolist() if not x.is_dir()]
-              print("zip_members", [(m.filename, m.file_size) for m in members])
-              csvs = [m for m in members if m.filename.lower().endswith(".csv")]
-              if not csvs:
-                  raise RuntimeError("No CSV found in ZIP")
-              target = max(csvs, key=lambda m: m.file_size)
-              print("selected_csv", target.filename, target.file_size)
-              z.extract(target, ".")
-              fn = target.filename
-
-          cols = [
-              "EDADGESTACIONAL","RESOLUCIONEMBARAZO","TIPOCESAREA",
-              "PRODUCTOEMBARAZO","CLUES","APGAR","SILVERMAN","LUGARNACIMIENTO"
-          ]
-          df = pd.read_csv(fn, usecols=cols, low_memory=False, dtype={"CLUES":"string"})
-          print("rows", len(df))
-          print("columns", list(df.columns))
-
-          print("\n=== RESOLUCIONEMBARAZO raw counts ===")
-          print(df["RESOLUCIONEMBARAZO"].value_counts(dropna=False).sort_index().to_string())
-
-          print("\n=== TIPOCESAREA raw counts (all births) ===")
-          print(df["TIPOCESAREA"].value_counts(dropna=False).sort_index().to_string())
-
-          ces = df[df["RESOLUCIONEMBARAZO"] == 3].copy()
-          print("\ncesarean_rows", len(ces))
-          print("\n=== TIPOCESAREA raw counts among cesareans ===")
-          print(ces["TIPOCESAREA"].value_counts(dropna=False).sort_index().to_string())
-
-          print("\n=== TIPOCESAREA x RESOLUCIONEMBARAZO ===")
-          print(pd.crosstab(df["TIPOCESAREA"], df["RESOLUCIONEMBARAZO"], dropna=False).to_string())
-
-          term = ces[ces["EDADGESTACIONAL"].between(37,41, inclusive="both")].copy()
-          print("\nterm_cesarean_rows_37_41", len(term))
-          print("\n=== TIPOCESAREA x gestational week among cesareans 37-41 ===")
-          print(pd.crosstab(term["TIPOCESAREA"], term["EDADGESTACIONAL"], dropna=False).to_string())
-
-          print("\n=== PRODUCTOEMBARAZO raw counts ===")
-          print(df["PRODUCTOEMBARAZO"].value_counts(dropna=False).sort_index().to_string())
-
-          cl = df["CLUES"].astype("string").str.strip()
-          invalid = cl.isna() | cl.eq("") | cl.eq("9998")
-          print("\nclues_missing_na", int(cl.isna().sum()))
-          print("clues_9998", int(cl.eq("9998").sum()))
-          print("clues_empty", int(cl.eq("").sum()))
-          print("clues_valid_rows", int((~invalid).sum()))
-          print("clues_unique_valid", int(cl[~invalid].nunique()))
-
-          ces_cl = ces["CLUES"].astype("string").str.strip()
-          ces_valid = ces[~(ces_cl.isna() | ces_cl.eq("") | ces_cl.eq("9998"))].copy()
-          print("\ncesarean_rows_valid_clues", len(ces_valid))
-          print("cesarean_unique_valid_clues", int(ces_valid["CLUES"].nunique()))
-
-          for code in sorted(ces_valid["TIPOCESAREA"].dropna().unique().tolist()):
-              sub = ces_valid[ces_valid["TIPOCESAREA"] == code]
-              vols = sub.groupby("CLUES").size()
-              print(f"\n=== Facility volumes for cesarean TIPOCESAREA={code} ===")
-              print("facilities_any", int(len(vols)))
-              for threshold in [10,20,30,50,100,200]:
-                  print(f"facilities_ge_{threshold}", int((vols >= threshold).sum()))
-
-          print("\n=== Raw early-term timing by TIPOCESAREA code ===")
-          for code in sorted(term["TIPOCESAREA"].dropna().unique().tolist()):
-              sub = term[term["TIPOCESAREA"] == code]
-              early = sub["EDADGESTACIONAL"].isin([37,38]).sum()
-              print("code", code, "n_term_37_41", len(sub),
-                    "n_37_38", int(early),
-                    "pct_37_38", round(100*early/len(sub),3) if len(sub) else None)
-
-          print("\n=== Cesarean timing by PRODUCTOEMBARAZO and TIPOCESAREA raw codes (37-41) ===")
-          tab = term.groupby(["PRODUCTOEMBARAZO","TIPOCESAREA","EDADGESTACIONAL"]).size()
-          print(tab.to_string())
-
-          print("\n=== APGAR<7 and SILVERMAN>0 by TIPOCESAREA and GA, cesareans 37-41 ===")
-          agg = term.groupby(["TIPOCESAREA","EDADGESTACIONAL"]).agg(
-              n=("APGAR","size"),
-              apgar_lt7=("APGAR", lambda s: int(((s < 7) & (s != 99)).sum())),
-              apgar_valid=("APGAR", lambda s: int((s != 99).sum())),
-              silverman_gt0=("SILVERMAN", lambda s: int(((s > 0) & (s != 99)).sum())),
-              silverman_valid=("SILVERMAN", lambda s: int((s != 99).sum()))
-          )
-          print(agg.to_string())
-
-          try: os.remove(fn)
-          except: pass
-          os.remove(zfn)
-          print("\nPilot complete; row-level files removed from ephemeral runner workspace.")
-          PY
+      - run: echo "SINAC MAPFRE pilot relay sanitized; no data transfer configured."
