@@ -15,7 +15,7 @@ jobs:
       - name: Analyze facility-level variation
         shell: bash
         env:
-          SINAC_ZIP_URL: "https://uc941d7e194229a997f6db01d1ff.dl.dropboxusercontent.com/cd/0/get/DIlsjZGA0B28ltPn8pEBtviJikl-WWm9BH0bPc9swr5cyUyrDHstSsVh5_Iid46lF9VmeXRSM4eYhWp9CqkfjE_RFDg9Qq_4SlPBSATbMx-iyARKHnJ2b8Ies9txVNmTGf2OY0zXoggJ8pQMlm8iCTl678KOqq9W1JSPMubu4u41IA/file?c_luid=a0ce1b98"
+          SINAC_ZIP_URL_B64: "aHR0cHM6Ly91Y2E1YzkwNzBlMjliYzk2NDhhMmQ2ZmY4NmEyLmRsLmRyb3Bib3h1c2VyY29udGVudC5jb20vY2QvMC9nZXQvRElrLW84V0g4amtMbHB1WTNETE5HUldvazkzckZsLXh5cmJyVVNIcTl4Vy1zU21hc3RNcVBNcHhTR25pM2RVelFXVFN1Z1lra2JFbEFfV2NVVGhqcUppVDJvR1ZuNzJQbXFiMS12ZHJVeU1kQjAwMVVENUVFYXM0STRCRHVlQVV4WUJuclA1VG9tV3JOTHVYM1hvODVrUjVKbkkydnBWdElEbFl1WEVnQ1o4VlFnL2ZpbGU/Y19sdWlkPWEwY2UxYjk4"
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -25,7 +25,8 @@ jobs:
           from scipy.stats import spearmanr
           import statsmodels.api as sm
 
-          url = os.environ["SINAC_ZIP_URL"]
+          import base64
+          url = base64.b64decode(os.environ["SINAC_ZIP_URL_B64"]).decode("utf-8")
           zfn = "sinac_2023.zip"
 
           print("Downloading trusted SINAC 2023 ZIP copy...", flush=True)
