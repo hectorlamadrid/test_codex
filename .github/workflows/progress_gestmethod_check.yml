@@ -1,14 +1,55 @@
-name: PROGRESS gest_method check
-
-# Inert placeholder after completed one-time PROGRESS gestational-age ascertainment check.
-# No Dropbox URL, row-level data, credentials, or participant identifiers are stored here.
-# Aggregate counts only were retained in the GitHub Actions log.
+name: PROGRESS gest_method metadata check
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - progress-gestmethod-check
 
 jobs:
-  placeholder:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "PROGRESS gest_method relay sanitized; no data transfer configured."
+      - name: Read gest_method Stata metadata with pandas
+        env:
+          DATA_URL: "https://uc8de9e1bdb3b7d3be458454025a.dl.dropboxusercontent.com/cd/0/get/DI6lS1VEqK-rd61xk1pto3io6-vlKuPQCvKvOZfHxs4ZvKVU8v5k_9IQYBXqzsKoTgFUD35MLnWCYRi5p-P38d30Cf2TtziRGUNy5EJv5cArMmTmTXtTecNHzQFPzyBiGBG7Q3oxYi1HkcMorDJHZ-KG-QuN_htn2LediGf4jCxXjA/file?c_luid=a0ce1b98"
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$DATA_URL"
+          python -m pip install --quiet pandas
+          python - <<'PY'
+          import os, subprocess
+          import pandas as pd
+          from pandas.io.stata import StataReader
+
+          url = os.environ["DATA_URL"]
+          subprocess.check_call(["curl","-L","--fail","--silent","--show-error",url,"-o","data.dta"])
+
+          with StataReader("data.dta", convert_categoricals=False) as reader:
+              vlabels = reader.variable_labels()
+              value_labels = reader.value_labels()
+              print("GEST_METHOD_VARIABLE_LABEL=", repr(vlabels.get("gest_method")))
+              print("VALUE_LABEL_TABLES_MATCHING_GEST_METHOD")
+              found = False
+              for name, mapping in value_labels.items():
+                  if isinstance(mapping, dict):
+                      vals = [str(v) for v in mapping.values()]
+                      if any(any(key in v.lower() for key in ["capurro","fecha","ambas","sabe"]) for v in vals):
+                          found = True
+                          print("TABLE=", repr(name))
+                          for code, label in mapping.items():
+                              print(f"  {repr(code)} -> {repr(label)}")
+              if not found:
+                  print("  NONE_FOUND")
+
+          cols = ["gest_method"]
+          labeled = pd.read_stata("data.dta", convert_categoricals=True, columns=cols)
+          raw = pd.read_stata("data.dta", convert_categoricals=False, columns=cols)
+
+          pairs = pd.DataFrame({
+              "raw": raw["gest_method"],
+              "label": labeled["gest_method"].astype("string")
+          }).drop_duplicates().sort_values("raw", na_position="last")
+          print("OBSERVED_RAW_TO_LABEL_PAIRS")
+          for _, row in pairs.iterrows():
+              print(f"  {repr(row['raw'])} -> {repr(row['label'])}")
+          PY
