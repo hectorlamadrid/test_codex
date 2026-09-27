@@ -1,69 +1,14 @@
 name: PROGRESS gest_method check
 
+# Inert placeholder after completed one-time PROGRESS gestational-age ascertainment check.
+# No Dropbox URL, row-level data, credentials, or participant identifiers are stored here.
+# Aggregate counts only were retained in the GitHub Actions log.
+
 on:
-  push:
-    branches:
-      - progress-gestmethod-check
+  workflow_dispatch:
 
 jobs:
-  check:
+  placeholder:
     runs-on: ubuntu-latest
     steps:
-      - name: Download and tabulate gestational-age ascertainment
-        env:
-          DATA_URL: "https://uc29b622a31518deb93a3e78f5eb.dl.dropboxusercontent.com/cd/0/get/DI4EXPKjRXBvp6u3LeqidPUffvOmkIpZL90SP4hjg5kq3mPRUJsrFIuVD9-3a5JxIis9L5cTyhuSOaLrTXzduhkN174XQ6N-sZ6XHmziuCjgVFWKnFceXCmFB6CPqChjieYuBLLHiZCbJ7Pah67vUtPc_ZX5nvV7C3P9YHAGFbotCw/file?c_luid=a0ce1b98"
-        run: |
-          set -euo pipefail
-          echo "::add-mask::$DATA_URL"
-          python -m pip install --quiet pandas pyreadstat
-          python - <<'PY'
-          import os, subprocess
-          import pandas as pd
-          import pyreadstat
-
-          url = os.environ["DATA_URL"]
-          subprocess.check_call(["curl", "-L", "--fail", "--silent", "--show-error", url, "-o", "data.dta"])
-
-          df = pd.read_stata("data.dta", convert_categoricals=True)
-          outcomes = ["pre_fvc_perc", "pre_fev1_perc", "pre_fev1_fvc_perc", "pre_fef_perc"]
-
-          etapa = df["etapa"].astype(str)
-          baseline = df.loc[etapa.eq("00"), ["folio", "preg_resolution", "gest_age", "gest_method"]].copy()
-          baseline["gest_age_num"] = pd.to_numeric(baseline["gest_age"], errors="coerce")
-
-          eligible = baseline.loc[
-              baseline["preg_resolution"].isin(["Vaginal", "Cesarea electiva", "Cesarea programada"])
-              & baseline["gest_age_num"].ge(37)
-          ].copy()
-
-          visits = df.loc[etapa.isin(["96", "120"]), ["folio", "etapa", *outcomes]].copy()
-          primary_obs = visits.merge(eligible[["folio"]], on="folio", how="inner")
-          primary_obs = primary_obs.loc[primary_obs[outcomes].notna().all(axis=1)].copy()
-          primary_ids = primary_obs["folio"].drop_duplicates()
-          primary = eligible.loc[eligible["folio"].isin(primary_ids)].drop_duplicates("folio").copy()
-
-          print("VALIDATION eligible_children=", eligible["folio"].nunique())
-          print("VALIDATION primary_children=", primary["folio"].nunique())
-          print("VALIDATION primary_observations=", len(primary_obs))
-          print("VALIDATION stage96=", (primary_obs["etapa"].astype(str)=="96").sum())
-          print("VALIDATION stage120=", (primary_obs["etapa"].astype(str)=="120").sum())
-
-          vals = primary["gest_method"].astype("string")
-          vc = vals.value_counts(dropna=False)
-          print("PRIMARY_GEST_METHOD_COUNTS")
-          total = len(primary)
-          for k, n in vc.items():
-              print(f"{k}: {int(n)} ({100*n/total:.3f}%)")
-
-          raw, meta = pyreadstat.read_dta("data.dta", apply_value_formats=False)
-          print("GEST_METHOD_VALUE_LABELS=", meta.variable_value_labels.get("gest_method"))
-          print("GEST_METHOD_COLUMN_LABEL=", meta.column_names_to_labels.get("gest_method"))
-
-          # Also show counts in all 859 eligible children, for provenance.
-          ev = eligible["gest_method"].astype("string").value_counts(dropna=False)
-          print("ELIGIBLE_GEST_METHOD_COUNTS")
-          for k, n in ev.items():
-              print(f"{k}: {int(n)} ({100*n/len(eligible):.3f}%)")
-
-          os.remove("data.dta")
-          PY
+      - run: echo "PROGRESS gest_method relay sanitized; no data transfer configured."
